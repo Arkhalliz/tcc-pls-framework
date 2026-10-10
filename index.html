@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Framework PLS - Análise de Equilíbrio em JCCs</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Framework PLS — Análise de Viabilidade e Equilíbrio</h1>
+    <p>Estudo de caso: Magic: The Gathering (Standard) | Fonte: API Scryfall | PLS = α_cm × (wPT×PT + wIM×IM + wVG×VG)</p>
+  </header>
+
+  <main>
+    <!-- 1. Configuração -->
+    <section id="config">
+      <h2>1. Configuração</h2>
+      <div class="grid2">
+        <div>
+          <h3>Pesos (renormalizados automaticamente)</h3>
+          <label>wPT (Poder/Resistência): <input type="number" id="wPT" value="0.20" step="0.01" min="0" max="1"></label>
+          <label>wIM (Impacto Imediato): <input type="number" id="wIM" value="0.45" step="0.01" min="0" max="1"></label>
+          <label>wVG (Valor Gerado): <input type="number" id="wVG" value="0.35" step="0.01" min="0" max="1"></label>
+          <p class="hint">Criaturas usam os 3 pesos normalizados para soma 1. Não-criaturas redistribuem wIM/wVG proporcionalmente.</p>
+          <button id="btnRecalc">Recalcular resultados exibidos</button>
+        </div>
+        <div>
+          <h3>Limiar (calibrado pelas banidas)</h3>
+          <label><input type="checkbox" id="useAuto" checked> Usar limiar automático (média pura das banidas)</label>
+          <label>Limiar manual: <input type="number" id="manualLimiar" value="7.0" step="0.1"></label>
+          <p>Limiar atual: <strong id="limiarAtual">—</strong> | Alerta a partir de: <strong id="alertaAtual">—</strong> (85% do limiar)</p>
+          <button id="btnCalibrar">Calibrar limiar (19 banidas do TCC)</button>
+          <p id="calStatus" class="hint">Ainda não calibrado. Clique em calibrar.</p>
+        </div>
+      </div>
+      <details>
+        <summary>Ver tabela α_cm (relevância temporal)</summary>
+        <table>
+          <tr><th>CMC</th><th>α_cm</th></tr>
+          <tr><td>0</td><td>1.5</td></tr>
+          <tr><td>1</td><td>1.5</td></tr>
+          <tr><td>2</td><td>1.3</td></tr>
+          <tr><td>3</td><td>1.1</td></tr>
+          <tr><td>4</td><td>1.0</td></tr>
+          <tr><td>5</td><td>0.9</td></tr>
+          <tr><td>6</td><td>0.7</td></tr>
+          <tr><td>7+</td><td>0.4</td></tr>
+        </table>
+      </details>
+    </section>
+
+    <!-- 2. Calibração -->
+    <section id="calibracao">
+      <h2>2. Cartas banidas de referência (TCC Quadro 2, sem terrenos)</h2>
+      <p class="hint">19 cartas. O limiar = média pura dos PLS calculados com os pesos atuais.</p>
+      <div class="tablewrap">
+        <table id="tabBanidas">
+          <thead><tr><th>Carta</th><th>CMC</th><th>Tipo</th><th>PLS</th></tr></thead>
+          <tbody><tr><td colspan="4">Nenhum dado. Calibre para preencher.</td></tr></tbody>
+        </table>
+      </div>
+      <p id="calResumo"></p>
+    </section>
+
+    <!-- 3. Busca única -->
+    <section id="busca">
+      <h2>3. Buscar uma carta</h2>
+      <div class="row">
+        <input type="text" id="nomeCarta" list="sugestoes" placeholder="Ex: Fable of the Mirror-Breaker" autocomplete="off">
+        <datalist id="sugestoes"></datalist>
+        <button id="btnBuscar">Analisar</button>
+      </div>
+      <div class="row">
+        <button class="mini" data-test="Grizzly Bears">Testar: Grizzly Bears</button>
+        <button class="mini" data-test="Badgermole Cub">Testar: Badgermole Cub</button>
+        <button class="mini" data-test="Fable of the Mirror-Breaker">Testar: Fable</button>
+        <button class="mini" data-test="Sundial, Dawn Tyrant">Testar: Sundial</button>
+      </div>
+      <div id="resultado"></div>
+    </section>
+
+    <!-- 4. Lote -->
+    <section id="lote">
+      <h2>4. Comparar lista (uma carta por linha)</h2>
+      <textarea id="listaCartas" rows="6" placeholder="Grizzly Bears&#10;Badgermole Cub&#10;Fable of the Mirror-Breaker&#10;Sundial, Dawn Tyrant"></textarea>
+      <div class="row">
+        <button id="btnLote">Analisar lista</button>
+      </div>
+      <p id="loteResumo"></p>
+      <div class="tablewrap">
+        <table id="tabLote">
+          <thead><tr><th>#</th><th>Carta</th><th>CMC</th><th>PT</th><th>IM</th><th>VG</th><th>PLS</th><th>IC</th><th>Status</th></tr></thead>
+          <tbody><tr><td colspan="9">Nenhuma análise ainda.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 5. Carta manual -->
+    <section id="manual">
+      <h2>5. Testar carta criada pelo designer</h2>
+      <p class="hint">Preencha os dados e clique em Gerar PL. As keywords são detectadas automaticamente do texto.</p>
+      <div class="grid2">
+        <div>
+          <label>Nome (opcional): <input type="text" id="mNome" placeholder="Minha carta"></label>
+          <label>Custo de mana (CMC): <input type="number" id="mCmc" value="2" min="0" max="16"></label>
+          <label>Tipo: <select id="mTipo">
+            <option>Creature</option>
+            <option>Instant</option>
+            <option>Sorcery</option>
+            <option>Enchantment</option>
+            <option>Artifact</option>
+            <option>Planeswalker</option>
+          </select></label>
+          <label>Poder: <input type="number" id="mPoder" value="2"></label>
+          <label>Resistência: <input type="number" id="mRes" value="2"></label>
+        </div>
+        <div>
+          <label>Texto da carta:</label>
+          <textarea id="mTexto" rows="7" placeholder="Ex: Flash, Flying. When this creature enters, draw a card."></textarea>
+          <button id="btnManual">Gerar PL</button>
+        </div>
+      </div>
+      <div id="resultadoManual"></div>
+    </section>
+
+    <footer>
+      <h3>Limitações (TCC Seção 4.4)</h3>
+      <ul>
+        <li>Análise individual: não captura sinergias entre cartas.</li>
+        <li>Textos atípicos podem gerar ruído — ver IC.</li>
+        <li>Calibrado para o Standard; não vale para Modern/Legacy/Commander.</li>
+        <li>Sem dados live de metagame; só atributos intrínsecos.</li>
+        <li>Não distingue mana genérico de colorido (usa cmc).</li>
+      </ul>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
